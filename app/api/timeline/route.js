@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
-import { prisma } from "@/lib/db";
+import { connect } from "@/lib/db";
+import { IssueTimeline } from "@/models";
+import { toResponse } from "@/lib/mongo-utils";
 
-/** GET /api/timeline?issueId= — timeline entries for an issue (public) */
 export async function GET(req) {
   try {
     const issueId = req.nextUrl.searchParams.get("issueId");
@@ -9,15 +10,17 @@ export async function GET(req) {
       return NextResponse.json({ success: false, message: "issueId required" }, { status: 400 });
     }
 
-    const entries = await prisma.issueTimeline.findMany({
-      where: { issueId },
-      orderBy: { createdAt: "asc" },
-      include: {
-        updatedBy: { select: { id: true, name: true } },
-      },
-    });
+    await connect();
+    const entries = await IssueTimeline.find({ issueId })
+      .sort({ createdAt: 1 })
+      .populate("updatedById", "name")
+      .lean();
 
-    return NextResponse.json({ success: true, data: entries });
+    const data = toResponse(entries).map((e) => ({
+      ...e,
+      updatedBy: e.updatedById && typeof e.updatedById === "object" ? e.updatedById : { id: e.updatedById, name: "" },
+    }));
+    return NextResponse.json({ success: true, data });
   } catch (err) {
     console.error("GET /api/timeline", err);
     return NextResponse.json({ success: false, message: "Internal server error" }, { status: 500 });

@@ -1,8 +1,9 @@
 import { NextResponse } from "next/server";
-import { prisma } from "@/lib/db";
+import { connect } from "@/lib/db";
+import { Issue, Vote, Comment } from "@/models";
 import { nearbyQuerySchema } from "@/lib/validations/issue";
+import { toResponse } from "@/lib/mongo-utils";
 
-/** GET /api/issues/nearby?lat=&lng=&radiusKm= — geo query (approx, no PostGIS) */
 export async function GET(req) {
   try {
     const { searchParams } = new URL(req.url);
@@ -20,24 +21,31 @@ export async function GET(req) {
     }
 
     const { lat, lng, radiusKm, limit } = parsed.data;
-    // Approx: 1° lat ~ 111km, 1° lng ~ 111*cos(lat) km
     const dLat = radiusKm / 111;
     const dLng = radiusKm / (111 * Math.cos((lat * Math.PI) / 180));
 
-    const issues = await prisma.issue.findMany({
-      where: {
-        latitude: { gte: lat - dLat, lte: lat + dLat },
-        longitude: { gte: lng - dLng, lte: lng + dLng },
-      },
-      take: limit,
-      orderBy: { createdAt: "desc" },
-      include: {
-        createdBy: { select: { id: true, name: true } },
-        _count: { select: { votes: true, comments: true } },
-      },
-    });
+    await connect();
+    const issues = await Issue.find({
+      latitude: { $gte: lat - dLat, $lte: lat + dLat },
+      longitude: { $gte: lng - dLng, $lte: lng + dLng },
+    })
+      .sort({ createdAt: -1 })
+      .limit(limit)
+      .populate("createdById", "name")
+      .lean();
 
-    return NextResponse.json({ success: true, data: issues });
+    const withCounts = await Promise.all(
+      issues.map(async (i) => ({
+        ...i,
+        _count: {
+          votes: await Vote.countDocuments({ issueId: i._id }),
+          comments: await Comment.countDocuments({ issueId: i._id }),
+        },
+      }))
+    );
+
+    const data = toResponse(withCounts).map((i) => ({ ...i, createdBy: i.createdById && typeof i.createdById === "object" ? i.createdById : { id: i.createdById, name: "" } }));
+    return NextResponse.json({ success: true, data });
   } catch (err) {
     console.error("GET /api/issues/nearby", err);
     return NextResponse.json({ success: false, message: "Internal server error" }, { status: 500 });

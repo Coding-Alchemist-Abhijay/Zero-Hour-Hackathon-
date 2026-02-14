@@ -7,10 +7,13 @@ import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Label } from "@/components/ui/label";
 import { Card } from "@/components/ui/Card";
-import { issuesApi, departmentsApi } from "@/lib/api";
+import { ImageUpload } from "@/components/upload/ImageUpload";
+import { IssueMap } from "@/components/map/IssueMap";
+import { issuesApi } from "@/lib/api";
 import { useAuthStoreImpl } from "@/store/authStore";
 import { ISSUE_CATEGORIES, ISSUE_SEVERITIES } from "@/types";
 import { toast } from "sonner";
+import { Locate } from "lucide-react";
 
 export default function NewIssuePage() {
   const router = useRouter();
@@ -24,6 +27,24 @@ export default function NewIssuePage() {
   const [longitude, setLongitude] = useState(77.391);
   const [address, setAddress] = useState("");
   const [city, setCity] = useState("");
+  const [imageUrls, setImageUrls] = useState([]);
+  const [showMapPicker, setShowMapPicker] = useState(false);
+
+  function useMyLocation() {
+    if (!navigator.geolocation) {
+      toast.error("Geolocation not supported.");
+      return;
+    }
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        setLatitude(pos.coords.latitude);
+        setLongitude(pos.coords.longitude);
+        toast.success("Location set.");
+      },
+      () => toast.error("Could not get location."),
+      { enableHighAccuracy: true }
+    );
+  }
 
   async function handleSubmit(e) {
     e.preventDefault();
@@ -43,6 +64,7 @@ export default function NewIssuePage() {
           longitude,
           address: address || undefined,
           city: city || undefined,
+          imageUrls: imageUrls.length ? imageUrls : undefined,
         },
         accessToken
       );
@@ -141,6 +163,35 @@ export default function NewIssuePage() {
             </div>
           </div>
           <div>
+            <div className="flex items-center gap-2">
+              <Button type="button" variant="outline" size="sm" onClick={useMyLocation}>
+                <Locate className="size-4" /> Use my location
+              </Button>
+              <Button type="button" variant="outline" size="sm" onClick={() => setShowMapPicker((v) => !v)}>
+                {showMapPicker ? "Hide map" : "Pick on map"}
+              </Button>
+            </div>
+            {showMapPicker && (
+              <div className="mt-3">
+                <IssueMap
+                  center={[latitude, longitude]}
+                  zoom={14}
+                  height={280}
+                  onLocationSelect={(lat, lng) => {
+                    setLatitude(lat);
+                    setLongitude(lng);
+                    toast.success("Location set. Click map to change.");
+                  }}
+                />
+                <p className="mt-1 text-xs text-muted-foreground">Click the map to set issue location.</p>
+              </div>
+            )}
+          </div>
+          <div>
+            <Label>Images (optional)</Label>
+            <ImageUpload value={imageUrls} onChange={setImageUrls} disabled={loading} className="mt-1.5" />
+          </div>
+          <div>
             <Label>Address (optional)</Label>
             <Input
               value={address}
@@ -159,7 +210,7 @@ export default function NewIssuePage() {
             />
           </div>
           <p className="text-xs text-muted-foreground">
-            Map picker and GPS auto-detect can be added here. Using manual lat/lng for now.
+            Use &quot;Use my location&quot; or &quot;Pick on map&quot; to set coordinates, or enter them manually.
           </p>
           <Button type="submit" disabled={loading}>
             {loading ? "Submitting…" : "Submit issue"}

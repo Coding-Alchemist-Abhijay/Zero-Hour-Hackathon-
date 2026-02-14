@@ -1,32 +1,22 @@
 import { NextResponse } from "next/server";
-import { prisma } from "@/lib/db";
+import { connect } from "@/lib/db";
+import { User } from "@/models";
 import { hashPassword, signToken } from "@/lib/auth";
 import { registerSchema } from "@/lib/validations/auth";
-
-/**
- * POST /api/auth/register
- * Body: { email, password, name, role? }
- * Returns: { user, accessToken }
- */
 export async function POST(req) {
   try {
     const body = await req.json();
     const parsed = registerSchema.safeParse(body);
-
     if (!parsed.success) {
       return NextResponse.json(
-        {
-          success: false,
-          message: "Validation failed",
-          errors: parsed.error.flatten().fieldErrors,
-        },
+        { success: false, message: "Validation failed", errors: parsed.error.flatten().fieldErrors },
         { status: 400 }
       );
     }
-
     const { email, password, name, role } = parsed.data;
 
-    const existing = await prisma.user.findUnique({ where: { email } });
+    await connect();
+    const existing = await User.findOne({ email });
     if (existing) {
       return NextResponse.json(
         { success: false, message: "An account with this email already exists" },
@@ -35,39 +25,19 @@ export async function POST(req) {
     }
 
     const passwordHash = await hashPassword(password);
-    const user = await prisma.user.create({
-      data: {
-        email,
-        passwordHash,
-        name,
-        role: role ?? "RESIDENT",
-      },
-      select: {
-        id: true,
-        email: true,
-        name: true,
-        role: true,
-        avatarUrl: true,
-        createdAt: true,
-      },
+    const user = await User.create({
+      email,
+      passwordHash,
+      name,
+      role: role ?? "RESIDENT",
     });
 
-    const accessToken = signToken({
-      id: user.id,
-      email: user.email,
-      role: user.role,
-    });
+    const safe = { id: user._id.toString(), email: user.email, name: user.name, role: user.role, avatarUrl: user.avatarUrl, createdAt: user.createdAt };
+    const accessToken = signToken({ id: user._id.toString(), email: user.email, role: user.role });
 
-    return NextResponse.json({
-      success: true,
-      user,
-      accessToken,
-    });
+    return NextResponse.json({ success: true, user: safe, accessToken });
   } catch (err) {
     console.error("POST /api/auth/register error:", err);
-    return NextResponse.json(
-      { success: false, message: "Internal server error" },
-      { status: 500 }
-    );
+    return NextResponse.json({ success: false, message: "Internal server error" }, { status: 500 });
   }
 }

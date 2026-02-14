@@ -1,47 +1,57 @@
 import { NextResponse } from "next/server";
-import { prisma } from "@/lib/db";
+import mongoose from "mongoose";
+import { connect } from "@/lib/db";
+import { Issue, Vote, Comment, IssueImage } from "@/models";
 import { getCurrentUser, requireAuth, requireRole } from "@/lib/api-auth";
 import { updateIssueSchema } from "@/lib/validations/issue";
+import { toResponse } from "@/lib/mongo-utils";
+import { IssueTimeline } from "@/models";
 
-/** GET /api/issues/[id] — single issue (public); includes userVoted when authenticated */
 export async function GET(req, { params }) {
   try {
-    const id = params.id;
-    const { user } = getCurrentUser(req);
-    const issue = await prisma.issue.findUnique({
-      where: { id },
-      include: {
-        createdBy: { select: { id: true, name: true } },
-        assignedTo: { select: { id: true, name: true } },
-        department: { select: { id: true, name: true, slug: true } },
-        images: true,
-        _count: { select: { votes: true, comments: true } },
-      },
-    });
-    if (!issue) return NextResponse.json({ success: false, message: "Issue not found" }, { status: 404 });
-    let userVoted = false;
-    if (user?.id) {
-      const vote = await prisma.vote.findUnique({
-        where: { issueId_userId: { issueId: id, userId: user.id } },
-      });
-      userVoted = !!vote;
+    const { id } = await params;
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return NextResponse.json({ success: false, message: "Issue not found" }, { status: 404 });
     }
-    return NextResponse.json({ success: true, data: { ...issue, userVoted } });
+    await connect();
+    const user = await getCurrentUser(req);
+
+    const issue = await Issue.findById(id)
+      .populate("createdById", "name")
+      .populate("assignedToId", "name")
+      .populate("departmentId", "name slug")
+      .lean();
+    if (!issue) return NextResponse.json({ success: false, message: "Issue not found" }, { status: 404 });
+
+    const [voteCount, commentCount, images, userVoted] = await Promise.all([
+      Vote.countDocuments({ issueId: id }),
+      Comment.countDocuments({ issueId: id }),
+      IssueImage.find({ issueId: id }).sort({ order: 1 }).lean(),
+      user?.id ? Vote.findOne({ issueId: id, userId: user.id }).lean().then((v) => !!v) : false,
+    ]);
+
+    const out = toResponse({ ...issue, _count: { votes: voteCount, comments: commentCount }, images, userVoted });
+    if (out.createdById && typeof out.createdById === "object") out.createdBy = out.createdById;
+    if (out.assignedToId && typeof out.assignedToId === "object") out.assignedTo = out.assignedToId;
+    if (out.departmentId && typeof out.departmentId === "object") out.department = out.departmentId;
+    return NextResponse.json({ success: true, data: out });
   } catch (err) {
     console.error("GET /api/issues/[id]", err);
     return NextResponse.json({ success: false, message: "Internal server error" }, { status: 500 });
   }
 }
 
-/** PATCH /api/issues/[id] — update status/assign (official/admin) */
 export async function PATCH(req, { params }) {
   try {
-    const { user, response } = await requireAuth(req);
-    if (response) return NextResponse.json(response.body, { status: response.status });
-    const roleCheck = requireRole(user, ["OFFICIAL", "ADMIN"]);
+    const auth = await requireAuth(req);
+    if (auth.response) return NextResponse.json(auth.response.body, { status: auth.response.status });
+    const roleCheck = requireRole(auth.user, ["OFFICIAL", "ADMIN"]);
     if (!roleCheck.ok) return NextResponse.json(roleCheck.body, { status: roleCheck.status });
 
-    const id = params.id;
+    const { id } = await params;
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return NextResponse.json({ success: false, message: "Issue not found" }, { status: 404 });
+    }
     const body = await req.json();
     const parsed = updateIssueSchema.safeParse(body);
     if (!parsed.success) {
@@ -51,33 +61,35 @@ export async function PATCH(req, { params }) {
       );
     }
 
-    const issue = await prisma.issue.findUnique({ where: { id } });
+    await connect();
+    const issue = await Issue.findById(id).lean();
     if (!issue) return NextResponse.json({ success: false, message: "Issue not found" }, { status: 404 });
 
     const { note, ...updates } = parsed.data;
     const newStatus = updates.status ?? issue.status;
+    const updateData = {
+      ...updates,
+      ...(newStatus === "Resolved" || newStatus === "Verified" ? { resolvedAt: new Date() } : {}),
+    };
 
-    const [updated] = await prisma.$transaction([
-      prisma.issue.update({
-        where: { id },
-        data: {
-          ...updates,
-          ...(newStatus === "Resolved" || newStatus === "Verified" ? { resolvedAt: new Date() } : {}),
-        },
-        include: {
-          createdBy: { select: { id: true, name: true } },
-          assignedTo: { select: { id: true, name: true } },
-          department: { select: { id: true, name: true } },
-          images: true,
-          _count: { select: { votes: true, comments: true } },
-        },
-      }),
-      prisma.issueTimeline.create({
-        data: { issueId: id, status: newStatus, note: note ?? null, updatedById: user.id },
-      }),
+    const updated = await Issue.findByIdAndUpdate(id, updateData, { new: true })
+      .populate("createdById", "name")
+      .populate("assignedToId", "name")
+      .populate("departmentId", "name")
+      .lean();
+
+    await IssueTimeline.create({ issueId: id, status: newStatus, note: note ?? null, updatedById: auth.user.id });
+
+    const [voteCount, commentCount] = await Promise.all([
+      Vote.countDocuments({ issueId: id }),
+      Comment.countDocuments({ issueId: id }),
     ]);
-
-    return NextResponse.json({ success: true, data: updated });
+    const images = await IssueImage.find({ issueId: id }).sort({ order: 1 }).lean();
+    const out = toResponse({ ...updated, _count: { votes: voteCount, comments: commentCount }, images });
+    if (out.createdById && typeof out.createdById === "object") out.createdBy = out.createdById;
+    if (out.assignedToId && typeof out.assignedToId === "object") out.assignedTo = out.assignedToId;
+    if (out.departmentId && typeof out.departmentId === "object") out.department = out.departmentId;
+    return NextResponse.json({ success: true, data: out });
   } catch (err) {
     console.error("PATCH /api/issues/[id]", err);
     return NextResponse.json({ success: false, message: "Internal server error" }, { status: 500 });

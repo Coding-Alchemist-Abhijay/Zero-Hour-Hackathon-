@@ -9,16 +9,15 @@ import { Skeleton } from "@/components/ui/skeleton";
 
 export default function TrackingPage() {
   const accessToken = useAuthStoreImpl((s) => s.accessToken);
-  const user = useAuthStoreImpl((s) => s.user);
   const [issues, setIssues] = useState([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     if (!accessToken) return;
-    issuesApi.list({}, accessToken).then((r) => setIssues(r.data ?? [])).finally(() => setLoading(false));
+    issuesApi.list({ createdBy: "me" }, accessToken).then((r) => setIssues(r.data ?? [])).finally(() => setLoading(false));
   }, [accessToken]);
 
-  const myIssues = issues.filter((i) => i.createdById === user?.id);
+  const myIssues = issues;
   const open = myIssues.filter((i) => !["Resolved", "Verified"].includes(i.status));
 
   return (

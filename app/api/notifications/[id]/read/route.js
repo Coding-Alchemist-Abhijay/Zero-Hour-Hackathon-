@@ -1,24 +1,19 @@
 import { NextResponse } from "next/server";
-import { prisma } from "@/lib/db";
+import { connect } from "@/lib/db";
+import { Notification } from "@/models";
 import { requireAuth } from "@/lib/api-auth";
 
-/** PATCH /api/notifications/[id]/read — mark as read (auth required) */
 export async function PATCH(req, { params }) {
   try {
-    const { user, response } = await requireAuth(req);
-    if (response) return NextResponse.json(response.body, { status: response.status });
+    const auth = await requireAuth(req);
+    if (auth.response) return NextResponse.json(auth.response.body, { status: auth.response.status });
 
-    const id = params.id;
-    const n = await prisma.notification.findFirst({
-      where: { id, userId: user.id },
-    });
+    const { id } = await params;
+    await connect();
+    const n = await Notification.findOne({ _id: id, userId: auth.user.id });
     if (!n) return NextResponse.json({ success: false, message: "Not found" }, { status: 404 });
 
-    await prisma.notification.update({
-      where: { id },
-      data: { read: true },
-    });
-
+    await Notification.updateOne({ _id: id }, { read: true });
     return NextResponse.json({ success: true });
   } catch (err) {
     console.error("PATCH /api/notifications/[id]/read", err);

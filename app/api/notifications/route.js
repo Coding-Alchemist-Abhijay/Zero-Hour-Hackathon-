@@ -1,26 +1,24 @@
 import { NextResponse } from "next/server";
-import { prisma } from "@/lib/db";
+import { connect } from "@/lib/db";
+import { Notification } from "@/models";
 import { requireAuth } from "@/lib/api-auth";
+import { toResponse } from "@/lib/mongo-utils";
 
-/** GET /api/notifications — list for current user (auth required) */
 export async function GET(req) {
   try {
-    const { user, response } = await requireAuth(req);
-    if (response) return NextResponse.json(response.body, { status: response.status });
+    const auth = await requireAuth(req);
+    if (auth.response) return NextResponse.json(auth.response.body, { status: auth.response.status });
 
     const limit = Math.min(Number(req.nextUrl.searchParams.get("limit")) || 50, 100);
     const unreadOnly = req.nextUrl.searchParams.get("unreadOnly") === "true";
 
-    const where = { userId: user.id };
-    if (unreadOnly) where.read = false;
+    await connect();
+    const filter = { userId: auth.user.id };
+    if (unreadOnly) filter.read = false;
 
-    const notifications = await prisma.notification.findMany({
-      where,
-      take: limit,
-      orderBy: { createdAt: "desc" },
-    });
+    const notifications = await Notification.find(filter).sort({ createdAt: -1 }).limit(limit).lean();
 
-    return NextResponse.json({ success: true, data: notifications });
+    return NextResponse.json({ success: true, data: toResponse(notifications) });
   } catch (err) {
     console.error("GET /api/notifications", err);
     return NextResponse.json({ success: false, message: "Internal server error" }, { status: 500 });
