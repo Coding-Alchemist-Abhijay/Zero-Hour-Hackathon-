@@ -16,5 +16,5 @@ export function AuthProvider({ children }) {
     if (accessToken) fetchMe();
   }, [isHydrated, accessToken, fetchMe]);
 
-  return children;
+  return <>{children}</>; // ✅ just render children, no NextAuth
 }
