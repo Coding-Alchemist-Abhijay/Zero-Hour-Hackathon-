@@ -14,7 +14,8 @@ const geistMono = Geist_Mono({
 
 export const metadata = {
   title: "CivicBridge – Transparent Civic Communication",
-  description: "Connect citizens and government with transparent issue tracking.",
+  description:
+    "Connect citizens and government with transparent issue tracking.",
 };
 
 export default function RootLayout({ children }) {
