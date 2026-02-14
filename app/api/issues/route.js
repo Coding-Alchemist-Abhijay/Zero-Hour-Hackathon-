@@ -1,9 +1,10 @@
 import { NextResponse } from "next/server";
-import { prisma } from "@/lib/db";
-import { requireAuth, requireRole } from "@/lib/api-auth";
-import { createIssueSchema, paginationSchema } from "@/lib/validations/issue";
+import { connect } from "@/lib/db";
+import { Issue, IssueImage, IssueTimeline, Vote, Comment } from "@/models";
+import { getCurrentUser, requireAuth, requireRole } from "@/lib/api-auth";
+import { createIssueSchema } from "@/lib/validations/issue";
+import { toResponse } from "@/lib/mongo-utils";
 
-/** GET /api/issues — list issues (public), with optional auth for filters */
 export async function GET(req) {
   try {
     const { searchParams } = new URL(req.url);
@@ -12,45 +13,55 @@ export async function GET(req) {
     const status = searchParams.get("status");
     const category = searchParams.get("category");
     const departmentId = searchParams.get("departmentId");
+    const createdByMe = searchParams.get("createdBy") === "me";
     const skip = (page - 1) * limit;
 
-    const where = {};
-    if (status) where.status = status;
-    if (category) where.category = category;
-    if (departmentId) where.departmentId = departmentId;
+    const user = await getCurrentUser(req);
+    const filter = {};
+    if (status) filter.status = status;
+    if (category) filter.category = category;
+    if (departmentId) filter.departmentId = departmentId;
+    if (createdByMe && user?.id) filter.createdById = user.id;
 
+    await connect();
     const [issues, total] = await Promise.all([
-      prisma.issue.findMany({
-        where,
-        skip,
-        take: limit,
-        orderBy: [{ createdAt: "desc" }],
-        include: {
-          createdBy: { select: { id: true, name: true } },
-          department: { select: { id: true, name: true, slug: true } },
-          _count: { select: { votes: true, comments: true } },
-        },
-      }),
-      prisma.issue.count({ where }),
+      Issue.find(filter)
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(limit)
+        .populate("createdById", "name")
+        .populate("departmentId", "name slug")
+        .lean(),
+      Issue.countDocuments(filter),
     ]);
 
-    return NextResponse.json({
-      success: true,
-      data: issues,
-      pagination: { page, limit, total },
-    });
+    const withCounts = await Promise.all(
+      issues.map(async (i) => {
+        const [votes, comments] = await Promise.all([
+          Vote.countDocuments({ issueId: i._id }),
+          Comment.countDocuments({ issueId: i._id }),
+        ]);
+        return { ...i, _count: { votes, comments } };
+      })
+    );
+
+    const data = toResponse(withCounts).map((i) => ({
+      ...i,
+      createdBy: i.createdById && typeof i.createdById === "object" ? i.createdById : { id: i.createdById, name: "" },
+      department: i.departmentId && typeof i.departmentId === "object" ? i.departmentId : (i.departmentId ? { id: i.departmentId, name: "" } : null),
+    }));
+    return NextResponse.json({ success: true, data, pagination: { page, limit, total } });
   } catch (err) {
     console.error("GET /api/issues", err);
     return NextResponse.json({ success: false, message: "Internal server error" }, { status: 500 });
   }
 }
 
-/** POST /api/issues — create issue (auth required) */
 export async function POST(req) {
   try {
-    const { user, response } = await requireAuth(req);
-    if (response) return NextResponse.json(response.body, { status: response.status });
-    const roleCheck = requireRole(user, ["RESIDENT", "ADMIN"]);
+    const auth = await requireAuth(req);
+    if (auth.response) return NextResponse.json(auth.response.body, { status: auth.response.status });
+    const roleCheck = requireRole(auth.user, ["RESIDENT", "ADMIN"]);
     if (!roleCheck.ok) return NextResponse.json(roleCheck.body, { status: roleCheck.status });
 
     const body = await req.json();
@@ -63,33 +74,25 @@ export async function POST(req) {
     }
 
     const { imageUrls, ...data } = parsed.data;
-    const issue = await prisma.issue.create({
-      data: {
-        ...data,
-        createdById: user.id,
-        priorityScore: data.severity === "Critical" ? 10 : data.severity === "High" ? 7 : 4,
-      },
+    const priorityScore = data.severity === "Critical" ? 10 : data.severity === "High" ? 7 : 4;
+
+    await connect();
+    const issue = await Issue.create({
+      ...data,
+      createdById: auth.user.id,
+      priorityScore,
     });
 
     if (imageUrls?.length) {
-      await prisma.issueImage.createMany({
-        data: imageUrls.map((url, order) => ({ issueId: issue.id, url, order })),
-      });
+      await IssueImage.insertMany(imageUrls.map((url, order) => ({ issueId: issue._id, url, order })));
     }
+    await IssueTimeline.create({ issueId: issue._id, status: "Submitted", updatedById: auth.user.id });
 
-    await prisma.issueTimeline.create({
-      data: { issueId: issue.id, status: "Submitted", updatedById: user.id },
-    });
-
-    const created = await prisma.issue.findUnique({
-      where: { id: issue.id },
-      include: {
-        createdBy: { select: { id: true, name: true } },
-        images: true,
-      },
-    });
-
-    return NextResponse.json({ success: true, data: created }, { status: 201 });
+    const created = await Issue.findById(issue._id).populate("createdById", "name").lean();
+    const images = await IssueImage.find({ issueId: issue._id }).sort({ order: 1 }).lean();
+    const out = toResponse({ ...created, images });
+    if (out.createdById && typeof out.createdById === "object") out.createdBy = out.createdById;
+    return NextResponse.json({ success: true, data: out }, { status: 201 });
   } catch (err) {
     console.error("POST /api/issues", err);
     return NextResponse.json({ success: false, message: "Internal server error" }, { status: 500 });

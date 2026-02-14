@@ -104,8 +104,8 @@ export default function CommunityIssueDetailPage() {
           ) : (
             comments.map((c) => (
               <div key={c.id} className="rounded border border-border p-3 text-sm">
-                <span className="font-medium text-foreground">{c.user?.name ?? "User"}</span>
-                <p className="mt-1 text-muted-foreground">{c.content}</p>
+                <span className="font-medium text-foreground">{c.author?.name ?? "User"}</span>
+                <p className="mt-1 text-muted-foreground">{c.body}</p>
               </div>
             ))
           )}

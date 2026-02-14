@@ -1,26 +1,26 @@
 import { NextResponse } from "next/server";
-import { prisma } from "@/lib/db";
+import { connect } from "@/lib/db";
+import { Survey, SurveyResponse } from "@/models";
 import { requireAuth } from "@/lib/api-auth";
 import { z } from "zod";
 
 const respondSchema = z.object({
-  answers: z.array(z.object({
-    questionId: z.string().cuid(),
-    answer: z.union([z.string(), z.number()]),
-  })),
+  answers: z.array(
+    z.object({
+      questionId: z.string(),
+      value: z.union([z.string(), z.number()]),
+    })
+  ),
 });
 
-/** POST /api/surveys/[id]/respond — submit survey response (auth required) */
 export async function POST(req, { params }) {
   try {
-    const { user, response } = await requireAuth(req);
-    if (response) return NextResponse.json(response.body, { status: response.status });
+    const auth = await requireAuth(req);
+    if (auth.response) return NextResponse.json(auth.response.body, { status: auth.response.status });
 
-    const surveyId = params.id;
-    const survey = await prisma.survey.findUnique({
-      where: { id: surveyId },
-      include: { questions: true },
-    });
+    const { id: surveyId } = await params;
+    await connect();
+    const survey = await Survey.findById(surveyId).populate("questions").lean();
 
     if (!survey || !survey.published) {
       return NextResponse.json({ success: false, message: "Survey not found or closed" }, { status: 404 });
@@ -38,22 +38,15 @@ export async function POST(req, { params }) {
       );
     }
 
-    const questionIds = survey.questions.map((q) => q.id);
+    const questionIds = survey.questions.map((q) => q._id.toString());
     for (const a of parsed.data.answers) {
       if (!questionIds.includes(a.questionId)) continue;
-      const existing = await prisma.surveyResponse.findFirst({
-        where: { surveyId, questionId: a.questionId, userId: user.id },
-      });
-      if (existing) {
-        await prisma.surveyResponse.update({
-          where: { id: existing.id },
-          data: { answer: a.answer },
-        });
-      } else {
-        await prisma.surveyResponse.create({
-          data: { surveyId, questionId: a.questionId, userId: user.id, answer: a.answer },
-        });
-      }
+      const answer = a.value;
+      await SurveyResponse.findOneAndUpdate(
+        { surveyId, questionId: a.questionId, userId: auth.user.id },
+        { $set: { answer } },
+        { upsert: true, new: true }
+      );
     }
 
     return NextResponse.json({ success: true });

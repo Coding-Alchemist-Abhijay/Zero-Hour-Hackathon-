@@ -1,14 +1,13 @@
 import { NextResponse } from "next/server";
-import { prisma } from "@/lib/db";
+import { connect } from "@/lib/db";
+import { Department } from "@/models";
+import { toResponse } from "@/lib/mongo-utils";
 
-/** GET /api/departments — list departments (public, for dropdowns/filters) */
 export async function GET() {
   try {
-    const departments = await prisma.department.findMany({
-      orderBy: { name: "asc" },
-      select: { id: true, name: true, slug: true, city: true },
-    });
-    return NextResponse.json({ success: true, data: departments });
+    await connect();
+    const departments = await Department.find().sort({ name: 1 }).select("name slug city description").lean();
+    return NextResponse.json({ success: true, data: toResponse(departments) });
   } catch (err) {
     console.error("GET /api/departments", err);
     return NextResponse.json({ success: false, message: "Internal server error" }, { status: 500 });

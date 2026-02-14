@@ -10,17 +10,13 @@ import { Skeleton } from "@/components/ui/skeleton";
 
 export default function MyImpactPage() {
   const accessToken = useAuthStoreImpl((s) => s.accessToken);
-  const user = useAuthStoreImpl((s) => s.user);
   const [issues, setIssues] = useState([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     if (!accessToken) return;
-    issuesApi.list({}, accessToken).then((r) => {
-      const all = r.data ?? [];
-      setIssues(all.filter((i) => i.createdById === user?.id));
-    }).finally(() => setLoading(false));
-  }, [accessToken, user?.id]);
+    issuesApi.list({ createdBy: "me" }, accessToken).then((r) => setIssues(r.data ?? [])).finally(() => setLoading(false));
+  }, [accessToken]);
 
   const resolved = issues.filter((i) => ["Resolved", "Verified"].includes(i.status));
   const open = issues.filter((i) => !["Resolved", "Verified"].includes(i.status));

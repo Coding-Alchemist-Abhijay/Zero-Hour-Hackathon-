@@ -18,7 +18,10 @@ export function IssueTimeline({ entries }) {
             <p className="font-medium text-foreground">{entry.status}</p>
             {entry.note && <p className="mt-0.5 text-sm text-muted-foreground">{entry.note}</p>}
             <p className="mt-1 text-xs text-muted-foreground">
-              {entry.updatedBy?.name ?? "System"} · {formatDistanceToNow(new Date(entry.createdAt), { addSuffix: true })}
+              {entry.updatedBy?.name ?? "System"}
+              {entry.createdAt && !Number.isNaN(new Date(entry.createdAt).getTime())
+                ? ` · ${formatDistanceToNow(new Date(entry.createdAt), { addSuffix: true })}`
+                : ""}
             </p>
           </div>
         </li>
