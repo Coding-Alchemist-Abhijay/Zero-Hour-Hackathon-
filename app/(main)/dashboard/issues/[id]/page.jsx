@@ -9,8 +9,9 @@ import { Card } from "@/components/ui/Card";
 import { issuesApi, commentsApi, votesApi, timelineApi } from "@/lib/api";
 import { useAuthStoreImpl } from "@/store/authStore";
 import { IssueTimeline } from "@/components/issues/IssueTimeline";
+import { IssueMap } from "@/components/map/IssueMap";
 import { Skeleton } from "@/components/ui/skeleton";
-import { MapPin, ThumbsUp, MessageSquare } from "lucide-react";
+import { MapPin, ThumbsUp, ImageIcon } from "lucide-react";
 import { toast } from "sonner";
 
 export default function IssueDetailPage() {
@@ -109,6 +110,49 @@ export default function IssueDetailPage() {
       </div>
 
       <p className="mt-6 text-muted-foreground">{issue.description}</p>
+
+      {issue.latitude != null && issue.longitude != null && (
+        <Card className="mt-8 overflow-hidden p-0">
+          <div className="px-6 pt-6">
+            <h2 className="font-semibold text-foreground flex items-center gap-2">
+              <MapPin className="size-4" /> Location
+            </h2>
+          </div>
+          <div className="p-4 pt-2">
+            <IssueMap
+              issues={[issue]}
+              center={[Number(issue.latitude), Number(issue.longitude)]}
+              zoom={15}
+              height={280}
+            />
+          </div>
+        </Card>
+      )}
+
+      {issue.images?.length > 0 && (
+        <Card className="mt-8 p-6">
+          <h2 className="font-semibold text-foreground flex items-center gap-2">
+            <ImageIcon className="size-4" /> Photos
+          </h2>
+          <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {issue.images.map((img) => (
+              <a
+                key={img.id ?? img.url}
+                href={img.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="block overflow-hidden rounded-lg border-2 border-border bg-muted/30 transition hover:border-primary/50"
+              >
+                <img
+                  src={img.url}
+                  alt="Issue photo"
+                  className="h-48 w-full object-cover"
+                />
+              </a>
+            ))}
+          </div>
+        </Card>
+      )}
 
       <Card className="mt-8 p-6">
         <h2 className="font-semibold text-foreground">Timeline</h2>
