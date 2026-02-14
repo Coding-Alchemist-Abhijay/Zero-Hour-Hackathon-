@@ -42,18 +42,18 @@ export default function RegisterPage() {
   }
 
   return (
-    <Card className="animate-in fade-in slide-in-from-bottom-4 duration-300">
-      <h1 className="text-2xl font-semibold text-[var(--foreground)] mb-1">
+    <Card className="opacity-0 animate-scale-in border-[var(--card-border)] shadow-[var(--shadow-lg)]">
+      <h1 className="text-2xl font-bold tracking-tight text-[var(--foreground)]">
         Create your account
       </h1>
-      <p className="text-[var(--muted)] mb-6">
+      <p className="mt-1.5 text-[var(--muted)]">
         Join CivicBridge and choose how you want to participate.
       </p>
 
-      <form onSubmit={handleSubmit} className="space-y-5">
+      <form onSubmit={handleSubmit} className="mt-8 space-y-5">
         {error && (
           <div
-            className="rounded-[var(--radius-sm)] bg-[var(--error)]/10 border border-[var(--error)]/20 px-4 py-3 text-sm text-[var(--error)]"
+            className="rounded-[var(--radius-sm)] border border-[var(--error)]/20 bg-[var(--error)]/10 px-4 py-3 text-sm text-[var(--error)]"
             role="alert"
           >
             {error}
@@ -89,7 +89,7 @@ export default function RegisterPage() {
           name="password"
           type="password"
           autoComplete="new-password"
-          placeholder="At least 8 chars, upper, lower, number"
+          placeholder="At least 8 characters, with upper, lower & number"
           value={password}
           onChange={(e) => setPassword(e.target.value)}
           error={fieldErrors.password?.[0]}
@@ -97,26 +97,32 @@ export default function RegisterPage() {
         />
 
         <div>
-          <span className="mb-2 block text-sm font-medium text-[var(--foreground)]">
+          <span className="mb-3 block text-sm font-medium text-[var(--foreground)]">
             I am a…
           </span>
-          <div className="grid grid-cols-2 gap-2" role="group" aria-label="Account type">
+          <div
+            className="grid grid-cols-2 gap-3"
+            role="group"
+            aria-label="Account type"
+          >
             {ROLE_OPTIONS.map((opt) => (
               <button
                 key={opt.value}
                 type="button"
                 onClick={() => setRole(opt.value)}
                 className={`
-                  rounded-[var(--radius-sm)] border-2 px-3 py-3 text-left text-sm
-                  transition btn-transition
+                  rounded-[var(--radius)] border-2 px-4 py-3.5 text-left text-sm text-[var(--foreground)]
+                  transition-all duration-200
                   ${role === opt.value
-                    ? "border-[var(--primary)] bg-[var(--primary-light)] text-[var(--primary)]"
-                    : "border-[var(--card-border)] bg-[var(--card)] text-[var(--foreground)] hover:border-[var(--muted)]"
+                    ? "border-[var(--primary)] bg-[var(--primary-light)] text-[var(--primary)] shadow-sm"
+                    : "border-[var(--card-border)] bg-[var(--card)] hover:border-[var(--muted)] hover:bg-[var(--muted-bg)]"
                   }
                 `}
               >
-                <span className="font-medium block">{opt.label}</span>
-                <span className="text-[var(--muted)] text-xs">{opt.desc}</span>
+                <span className="font-semibold block">{opt.label}</span>
+                <span className="mt-0.5 block text-xs text-[var(--muted)]">
+                  {opt.desc}
+                </span>
               </button>
             ))}
           </div>
@@ -133,11 +139,11 @@ export default function RegisterPage() {
         </Button>
       </form>
 
-      <p className="mt-6 text-center text-sm text-[var(--muted)]">
+      <p className="mt-8 text-center text-sm text-[var(--muted)]">
         Already have an account?{" "}
         <Link
           href="/login"
-          className="font-medium text-[var(--primary)] hover:underline transition underline-offset-2"
+          className="font-semibold text-[var(--primary)] link-underline"
         >
           Sign in
         </Link>

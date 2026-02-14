@@ -30,18 +30,18 @@ export default function LoginPage() {
   }
 
   return (
-    <Card className="animate-in fade-in slide-in-from-bottom-4 duration-300">
-      <h1 className="text-2xl font-semibold text-[var(--foreground)] mb-1">
+    <Card className="opacity-0 animate-scale-in border-[var(--card-border)] shadow-[var(--shadow-lg)]">
+      <h1 className="text-2xl font-bold tracking-tight text-[var(--foreground)]">
         Welcome back
       </h1>
-      <p className="text-[var(--muted)] mb-6">
+      <p className="mt-1.5 text-[var(--muted)]">
         Sign in to your CivicBridge account.
       </p>
 
-      <form onSubmit={handleSubmit} className="space-y-5">
+      <form onSubmit={handleSubmit} className="mt-8 space-y-5">
         {error && (
           <div
-            className="rounded-[var(--radius-sm)] bg-[var(--error)]/10 border border-[var(--error)]/20 px-4 py-3 text-sm text-[var(--error)]"
+            className="rounded-[var(--radius-sm)] border border-[var(--error)]/20 bg-[var(--error)]/10 px-4 py-3 text-sm text-[var(--error)]"
             role="alert"
           >
             {error}
@@ -56,7 +56,6 @@ export default function LoginPage() {
           placeholder="you@example.com"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
-          error={null}
           required
         />
 
@@ -68,7 +67,6 @@ export default function LoginPage() {
           placeholder="••••••••"
           value={password}
           onChange={(e) => setPassword(e.target.value)}
-          error={null}
           required
         />
 
@@ -83,11 +81,11 @@ export default function LoginPage() {
         </Button>
       </form>
 
-      <p className="mt-6 text-center text-sm text-[var(--muted)]">
+      <p className="mt-8 text-center text-sm text-[var(--muted)]">
         Don’t have an account?{" "}
         <Link
           href="/register"
-          className="font-medium text-[var(--primary)] hover:underline transition underline-offset-2"
+          className="font-semibold text-[var(--primary)] link-underline"
         >
           Create one
         </Link>

@@ -1,8 +1,5 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
-// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+// CivicBridge - PostgreSQL schema
+// https://pris.ly/d/prisma-schema
 
 generator client {
   provider = "prisma-client-js"
@@ -12,6 +9,8 @@ datasource db {
   provider = "postgresql"
 }
 
+// ============== ENUMS ==============
+
 enum Role {
   RESIDENT
   OFFICIAL
@@ -19,87 +18,279 @@ enum Role {
   ADMIN
 }
 
-model User {
-  id           String   @id @default(cuid())
-  email        String   @unique
-  passwordHash String   @map("password_hash")
-  name         String
-  role         Role     @default(RESIDENT)
-  avatarUrl    String?  @map("avatar_url")
-  emailVerified Boolean @default(false) @map("email_verified")
-  createdAt    DateTime @default(now()) @map("created_at")
-  updatedAt    DateTime @updatedAt @map("updated_at")
+enum IssueStatus {
+  Submitted
+  Acknowledged
+  Assigned
+  InProgress
+  Resolved
+  Verified
+}
 
-  // Relations for future use
-  issuesCreated   Issue[]           @relation("CreatedBy")
-  issueTimelines  IssueTimeline[]   @relation("UpdatedBy")
-  comments        Comment[]        @relation("CommentAuthor")
-  upvotes         Upvote[]         @relation("UpvoteUser")
+enum IssueCategory {
+  Road
+  Garbage
+  Water
+  Electricity
+  Sanitation
+  Streetlight
+  Drainage
+  Other
+}
+
+enum IssueSeverity {
+  Low
+  Medium
+  High
+  Critical
+}
+
+enum NotificationType {
+  StatusUpdate
+  Comment
+  Survey
+  SLAAlert
+  Assignment
+}
+
+// ============== USERS & DEPARTMENTS ==============
+
+model User {
+  id            String    @id @default(cuid())
+  email         String    @unique
+  passwordHash  String    @map("password_hash")
+  name         String
+  role         Role      @default(RESIDENT)
+  avatarUrl    String?   @map("avatar_url")
+  departmentId String?   @map("department_id")
+  emailVerified Boolean  @default(false) @map("email_verified")
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
+
+  department    Department?    @relation(fields: [departmentId], references: [id])
+  issuesCreated Issue[]        @relation("IssueAuthor")
+  timelines     IssueTimeline[] @relation("TimelineUser")
+  comments      Comment[]
+  votes         Vote[]
+  notifications Notification[]
+  surveyResponses SurveyResponse[]
+  assignedIssues Issue[]       @relation("AssignedTo")
+  surveysCreated Survey[]      @relation("SurveyAuthor")
 
   @@map("users")
 }
 
-// Issue model - location stored as JSON for GeoJSON; use PostGIS raw queries for spatial
+model Department {
+  id          String   @id @default(cuid())
+  name        String
+  slug        String   @unique
+  description String?
+  city        String?
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  users  User[]
+  issues Issue[]
+
+  @@map("departments")
+}
+
+// ============== ISSUES ==============
+
 model Issue {
-  id            String   @id @default(cuid())
+  id            String         @id @default(cuid())
   title         String
   description   String
-  category      String
-  severity      String
-  status        String   @default("Submitted")
-  location      Json     // { type: "Point", coordinates: [lng, lat] }
+  category      IssueCategory
+  severity      IssueSeverity
+  status        IssueStatus    @default(Submitted)
+  latitude      Float          @map("lat")
+  longitude     Float          @map("lng")
   address       String?
   city          String?
-  images        String[] @default([])
-  priorityScore Int      @default(1) @map("priority_score")
-  createdById   String   @map("created_by_id")
-  createdAt     DateTime @default(now()) @map("created_at")
-  updatedAt     DateTime @updatedAt @map("updated_at")
+  priorityScore Int            @default(0) @map("priority_score")
+  createdById   String         @map("created_by_id")
+  assignedToId  String?        @map("assigned_to_id")
+  departmentId  String?        @map("department_id")
+  createdAt     DateTime       @default(now()) @map("created_at")
+  updatedAt     DateTime       @updatedAt @map("updated_at")
+  resolvedAt    DateTime?      @map("resolved_at")
 
-  createdBy     User     @relation("CreatedBy", fields: [createdById], references: [id], onDelete: Cascade)
-  timelines     IssueTimeline[]
-  comments      Comment[]
-  upvotes       Upvote[]
+  createdBy   User         @relation("IssueAuthor", fields: [createdById], references: [id], onDelete: Cascade)
+  assignedTo  User?        @relation("AssignedTo", fields: [assignedToId], references: [id])
+  department  Department?  @relation(fields: [departmentId], references: [id])
+  images      IssueImage[]
+  timelines   IssueTimeline[]
+  comments    Comment[]
+  votes       Vote[]
+  slaTracking SLATracking[]
+  aiPrediction AiPrediction?
 
+  @@index([status, createdAt])
+  @@index([latitude, longitude])
+  @@index([departmentId])
   @@map("issues")
 }
 
-model IssueTimeline {
-  id        String   @id @default(cuid())
-  issueId   String   @map("issue_id")
-  status    String
-  note      String?
-  updatedById String @map("updated_by_id")
+model IssueImage {
+  id      String   @id @default(cuid())
+  url     String
+  issueId String   @map("issue_id")
+  order   Int      @default(0)
   createdAt DateTime @default(now()) @map("created_at")
 
-  issue     Issue  @relation(fields: [issueId], references: [id], onDelete: Cascade)
-  updatedBy User   @relation("UpdatedBy", fields: [updatedById], references: [id], onDelete: Cascade)
+  issue Issue @relation(fields: [issueId], references: [id], onDelete: Cascade)
 
+  @@index([issueId])
+  @@map("issue_images")
+}
+
+model IssueTimeline {
+  id          String     @id @default(cuid())
+  issueId     String     @map("issue_id")
+  status      IssueStatus
+  note        String?
+  updatedById String     @map("updated_by_id")
+  createdAt   DateTime   @default(now()) @map("created_at")
+
+  issue     Issue @relation(fields: [issueId], references: [id], onDelete: Cascade)
+  updatedBy User  @relation("TimelineUser", fields: [updatedById], references: [id], onDelete: Cascade)
+
+  @@index([issueId])
   @@map("issue_timelines")
 }
+
+// ============== ENGAGEMENT ==============
 
 model Comment {
   id        String   @id @default(cuid())
   body      String
   issueId   String   @map("issue_id")
   authorId  String   @map("author_id")
+  parentId  String?  @map("parent_id")
   createdAt DateTime @default(now()) @map("created_at")
 
-  issue  Issue @relation(fields: [issueId], references: [id], onDelete: Cascade)
-  author User  @relation("CommentAuthor", fields: [authorId], references: [id], onDelete: Cascade)
+  issue   Issue    @relation(fields: [issueId], references: [id], onDelete: Cascade)
+  author  User     @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  parent  Comment? @relation("CommentReplies", fields: [parentId], references: [id], onDelete: Cascade)
+  replies Comment[] @relation("CommentReplies")
 
+  @@index([issueId])
   @@map("comments")
 }
 
-model Upvote {
+model Vote {
   id       String   @id @default(cuid())
   issueId  String   @map("issue_id")
   userId   String   @map("user_id")
   createdAt DateTime @default(now()) @map("created_at")
 
   issue Issue @relation(fields: [issueId], references: [id], onDelete: Cascade)
-  user  User  @relation("UpvoteUser", fields: [userId], references: [id], onDelete: Cascade)
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([issueId, userId])
-  @@map("upvotes")
+  @@map("votes")
+}
+
+// ============== NOTIFICATIONS ==============
+
+model Notification {
+  id        String           @id @default(cuid())
+  userId    String           @map("user_id")
+  type      NotificationType
+  title     String
+  body      String?
+  link      String?
+  read      Boolean          @default(false)
+  createdAt DateTime         @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("notifications")
+}
+
+// ============== SURVEYS ==============
+
+model Survey {
+  id           String   @id @default(cuid())
+  title        String
+  description  String?
+  createdById  String   @map("created_by_id")
+  departmentId String?  @map("department_id")
+  startsAt     DateTime @map("starts_at")
+  endsAt       DateTime @map("ends_at")
+  published    Boolean  @default(false)
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  createdBy User   @relation("SurveyAuthor", fields: [createdById], references: [id], onDelete: Cascade)
+  questions SurveyQuestion[]
+  responses SurveyResponse[]
+
+  @@map("surveys")
+}
+
+model SurveyQuestion {
+  id         String  @id @default(cuid())
+  surveyId   String  @map("survey_id")
+  text       String
+  order      Int     @default(0)
+  options    Json    // ["Option A", "Option B"] or [] for free text
+
+  survey    Survey          @relation(fields: [surveyId], references: [id], onDelete: Cascade)
+  responses SurveyResponse[]
+
+  @@index([surveyId])
+  @@map("survey_questions")
+}
+
+model SurveyResponse {
+  id          String   @id @default(cuid())
+  surveyId    String   @map("survey_id")
+  questionId  String   @map("question_id")
+  userId      String   @map("user_id")
+  answer      Json     // string or number (option index)
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  survey   Survey         @relation(fields: [surveyId], references: [id], onDelete: Cascade)
+  question SurveyQuestion @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  user     User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([surveyId])
+  @@index([userId])
+  @@map("survey_responses")
+}
+
+// ============== AI & SLA (schema only, no AI implementation) ==============
+
+model AiPrediction {
+  id          String   @id @default(cuid())
+  issueId     String   @unique @map("issue_id")
+  category    String?
+  priorityScore Int?   @map("priority_score")
+  estimatedResolutionDays Int? @map("estimated_resolution_days")
+  riskZone    String?  @map("risk_zone")
+  rawResponse Json?   @map("raw_response")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  issue Issue @relation(fields: [issueId], references: [id], onDelete: Cascade)
+
+  @@map("ai_predictions")
+}
+
+model SLATracking {
+  id            String    @id @default(cuid())
+  issueId       String    @map("issue_id")
+  acknowledgedAt DateTime? @map("acknowledged_at")
+  assignedAt   DateTime?  @map("assigned_at")
+  resolvedAt   DateTime? @map("resolved_at")
+  targetHours   Int       @map("target_hours")
+  breached      Boolean   @default(false)
+  createdAt    DateTime  @default(now()) @map("created_at")
+
+  issue Issue @relation(fields: [issueId], references: [id], onDelete: Cascade)
+
+  @@index([issueId])
+  @@map("sla_tracking")
 }

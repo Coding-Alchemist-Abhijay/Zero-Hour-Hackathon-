@@ -1,16 +1,19 @@
 "use client";
 
-/**
- * Card container with optional padding and subtle border/shadow.
- */
-export function Card({ children, className = "", padding = true, ...props }) {
+export function Card({
+  children,
+  className = "",
+  padding = true,
+  hover = true,
+  ...props
+}) {
   return (
     <div
       className={`
-        rounded-[var(--radius)] border border-[var(--card-border)]
+        rounded-[var(--radius-lg)] border border-[var(--card-border)]
         bg-[var(--card)] shadow-[var(--shadow)]
-        transition box-shadow var(--transition)
-        hover:shadow-[var(--shadow-lg)]
+        transition-all duration-300
+        ${hover ? "hover:shadow-[var(--shadow-lg)] hover:border-[var(--card-border)]" : ""}
         ${padding ? "p-6 sm:p-8" : ""}
         ${className}
       `}
