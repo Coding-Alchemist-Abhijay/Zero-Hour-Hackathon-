@@ -130,7 +130,7 @@
 
 ---
 
-## 5. Analytics and departments
+## 5. Analytics and departments 
 
 **Purpose:** Aggregate stats and department list for dashboards and transparency.
 

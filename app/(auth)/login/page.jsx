@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Card } from "@/components/ui/Card";
+import { Label } from "@/components/ui/label";
 import { useAuthStoreImpl } from "@/store/authStore";
 
 export default function LoginPage() {
@@ -30,66 +31,72 @@ export default function LoginPage() {
   }
 
   return (
-    <Card className="opacity-0 animate-scale-in border-[var(--card-border)] shadow-[var(--shadow-lg)]">
-      <h1 className="text-2xl font-bold tracking-tight text-[var(--foreground)]">
-        Welcome back
-      </h1>
-      <p className="mt-1.5 text-[var(--muted)]">
-        Sign in to your CivicBridge account.
-      </p>
+    <Card className="w-full max-w-md border-2 border-border bg-card/95 shadow-xl backdrop-blur-sm opacity-0 animate-scale-in">
+      <div className="p-8">
+        <h1 className="text-2xl font-bold tracking-tight text-foreground">
+          Welcome back
+        </h1>
+        <p className="mt-1.5 text-sm text-muted-foreground">
+          Sign in to your CivicBridge account.
+        </p>
 
-      <form onSubmit={handleSubmit} className="mt-8 space-y-5">
-        {error && (
-          <div
-            className="rounded-[var(--radius-sm)] border border-[var(--error)]/20 bg-[var(--error)]/10 px-4 py-3 text-sm text-[var(--error)]"
-            role="alert"
-          >
-            {error}
+        <form onSubmit={handleSubmit} className="mt-8 space-y-5">
+          {error && (
+            <div
+              className="rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive"
+              role="alert"
+            >
+              {error}
+            </div>
+          )}
+
+          <div className="space-y-2">
+            <Label htmlFor="login-email" className="text-foreground">Email</Label>
+            <Input
+              id="login-email"
+              name="email"
+              type="email"
+              autoComplete="email"
+              placeholder="you@example.com"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              className="rounded-lg border-2 border-input focus-visible:ring-2"
+              required
+            />
           </div>
-        )}
 
-        <Input
-          label="Email"
-          name="email"
-          type="email"
-          autoComplete="email"
-          placeholder="you@example.com"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          required
-        />
+          <div className="space-y-2">
+            <Label htmlFor="login-password" className="text-foreground">Password</Label>
+            <Input
+              id="login-password"
+              name="password"
+              type="password"
+              autoComplete="current-password"
+              placeholder="••••••••"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              className="rounded-lg border-2 border-input focus-visible:ring-2"
+              required
+            />
+          </div>
 
-        <Input
-          label="Password"
-          name="password"
-          type="password"
-          autoComplete="current-password"
-          placeholder="••••••••"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          required
-        />
+          <Button
+            type="submit"
+            size="lg"
+            className="w-full mt-2 rounded-lg"
+            disabled={isLoading}
+          >
+            {isLoading ? "Signing in…" : "Sign in"}
+          </Button>
+        </form>
 
-        <Button
-          type="submit"
-          variant="primary"
-          size="lg"
-          className="w-full mt-2"
-          loading={isLoading}
-        >
-          Sign in
-        </Button>
-      </form>
-
-      <p className="mt-8 text-center text-sm text-[var(--muted)]">
-        Don’t have an account?{" "}
-        <Link
-          href="/register"
-          className="font-semibold text-[var(--primary)] link-underline"
-        >
-          Create one
-        </Link>
-      </p>
+        <p className="mt-8 text-center text-sm text-muted-foreground border-t border-border pt-6">
+          Don&apos;t have an account?{" "}
+          <Link href="/register" className="font-semibold text-primary hover:underline">
+            Create one
+          </Link>
+        </p>
+      </div>
     </Card>
   );
 }
