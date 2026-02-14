@@ -1,0 +1,105 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum Role {
+  RESIDENT
+  OFFICIAL
+  JOURNALIST
+  ADMIN
+}
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String   @map("password_hash")
+  name         String
+  role         Role     @default(RESIDENT)
+  avatarUrl    String?  @map("avatar_url")
+  emailVerified Boolean @default(false) @map("email_verified")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  // Relations for future use
+  issuesCreated   Issue[]           @relation("CreatedBy")
+  issueTimelines  IssueTimeline[]   @relation("UpdatedBy")
+  comments        Comment[]        @relation("CommentAuthor")
+  upvotes         Upvote[]         @relation("UpvoteUser")
+
+  @@map("users")
+}
+
+// Issue model - location stored as JSON for GeoJSON; use PostGIS raw queries for spatial
+model Issue {
+  id            String   @id @default(cuid())
+  title         String
+  description   String
+  category      String
+  severity      String
+  status        String   @default("Submitted")
+  location      Json     // { type: "Point", coordinates: [lng, lat] }
+  address       String?
+  city          String?
+  images        String[] @default([])
+  priorityScore Int      @default(1) @map("priority_score")
+  createdById   String   @map("created_by_id")
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  createdBy     User     @relation("CreatedBy", fields: [createdById], references: [id], onDelete: Cascade)
+  timelines     IssueTimeline[]
+  comments      Comment[]
+  upvotes       Upvote[]
+
+  @@map("issues")
+}
+
+model IssueTimeline {
+  id        String   @id @default(cuid())
+  issueId   String   @map("issue_id")
+  status    String
+  note      String?
+  updatedById String @map("updated_by_id")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  issue     Issue  @relation(fields: [issueId], references: [id], onDelete: Cascade)
+  updatedBy User   @relation("UpdatedBy", fields: [updatedById], references: [id], onDelete: Cascade)
+
+  @@map("issue_timelines")
+}
+
+model Comment {
+  id        String   @id @default(cuid())
+  body      String
+  issueId   String   @map("issue_id")
+  authorId  String   @map("author_id")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  issue  Issue @relation(fields: [issueId], references: [id], onDelete: Cascade)
+  author User  @relation("CommentAuthor", fields: [authorId], references: [id], onDelete: Cascade)
+
+  @@map("comments")
+}
+
+model Upvote {
+  id       String   @id @default(cuid())
+  issueId  String   @map("issue_id")
+  userId   String   @map("user_id")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  issue Issue @relation(fields: [issueId], references: [id], onDelete: Cascade)
+  user  User  @relation("UpvoteUser", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([issueId, userId])
+  @@map("upvotes")
+}

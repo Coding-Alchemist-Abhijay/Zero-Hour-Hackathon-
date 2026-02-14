@@ -98,7 +98,7 @@ export async function POST(req) {
           coordinates: [data.location.lng, data.location.lat],
         },
         images: data.images || [],
-        createdBy: user.id,
+        createdById: user.id,
         priorityScore: 1, // You can calculate dynamically
       },
     });
@@ -111,7 +111,7 @@ export async function POST(req) {
       data: {
         issueId: issue.id,
         status: "Submitted",
-        updatedBy: user.id,
+        updatedById: user.id,
       },
     });
 
