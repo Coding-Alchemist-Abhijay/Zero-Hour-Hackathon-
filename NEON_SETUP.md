@@ -13,8 +13,8 @@ Replace with your real password if needed. Example for your project:
 # Pooled (for Next.js app)
 DATABASE_URL="postgresql://neondb_owner:npg_N7U5eGEOlQcq@ep-cold-truth-ai75eguh-pooler.c-4.us-east-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require"
 
-# Direct (for prisma migrate / prisma db pull) – same URL but remove "-pooler" from host
-DIRECT_URL="postgresql://neondb_owner:npg_N7U5eGEOlQcq@ep-cold-truth-ai75eguh.c-4.us-east-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require"
+# Direct (for prisma migrate) – no "-pooler", and add connect_timeout for Neon cold start
+DIRECT_URL="postgresql://neondb_owner:npg_N7U5eGEOlQcq@ep-cold-truth-ai75eguh.c-4.us-east-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require&connect_timeout=15"
 ```
 
 Make sure:
@@ -22,9 +22,7 @@ Make sure:
 - No spaces around `=`, and the value is in double quotes.
 - No extra spaces or line breaks inside the URL.
 
-Optional: if you see connection timeouts (e.g. cold start), add to `DATABASE_URL`:
-
-`&connect_timeout=15`
+**If you get "Can't reach database server" (P1001):** Neon’s compute may be sleeping (cold start). Add `&connect_timeout=15` to **DIRECT_URL** and run `npx prisma migrate dev` again; the second run often works once the compute is awake.
 
 ## 2. Run migrations
 
